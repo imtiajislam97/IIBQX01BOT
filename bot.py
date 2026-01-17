@@ -16,18 +16,29 @@ from telegram.ext import (
 # ==============================
 # 🔐 BOT TOKEN
 # ==============================
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # set in Railway / Render env vars
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # ==============================
-# 🔒 ALLOWED TELEGRAM USERS
+# 👑 ADMIN
 # ==============================
-ALLOWED_USERS = {
-    7116950303,
-    6408755530
+ADMIN_ID = 7116950303  # Imti
+
+# ==============================
+# 🔒 ALLOWED USERS + NICKNAMES
+# ==============================
+USER_NICKNAMES = {
+    7116950303: "Imti",
+    7116696979: "IIB Support",
+    6408755530: "Tanvir TAAC"
 }
 
+ALLOWED_USERS = set(USER_NICKNAMES.keys())
+
+def nick(uid):
+    return USER_NICKNAMES.get(uid, str(uid))
+
 # ==============================
-# 🕘 AUTO DISABLE LOGIC (Dhaka) – FIXED, RULES SAME
+# 🕘 AUTO DISABLE LOGIC (Dhaka) – UNCHANGED
 # ==============================
 dhaka = pytz.timezone("Asia/Dhaka")
 
@@ -38,22 +49,17 @@ def is_bot_disabled():
 
     allowed = False
 
-    # Monday–Thursday: 9 AM → 9 PM
     if day in ["Tuesday", "Wednesday", "Thursday"]:
         if 9 <= hour < 21:
             allowed = True
 
-    # Monday: after 9 AM only
     elif day == "Monday":
         if 9 <= hour < 21:
             allowed = True
 
-    # Friday: before 9 PM only
     elif day == "Friday":
         if hour < 21:
             allowed = True
-
-    # Saturday & Sunday: always disabled
 
     return not allowed
 
@@ -81,7 +87,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You are not authorized to use this bot.")
         return ConversationHandler.END
 
+    # 🔔 ADMIN LOG
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=(
+            "🧠 BOT ACCESS\n"
+            f"User: {nick(user_id)}\n"
+            f"Time: {datetime.now(dhaka).strftime('%Y-%m-%d %I:%M %p')}"
+        )
+    )
+
     if is_bot_disabled():
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=(
+                "⛔ DISABLED ATTEMPT\n"
+                f"User: {nick(user_id)}\n"
+                f"Time: {datetime.now(dhaka).strftime('%Y-%m-%d %I:%M %p')}"
+            )
+        )
+
         await update.message.reply_text(
             "⚠️SORRY, MATE,\n"
             "🚫 IIB Future Signal Bot IS TEMPORARILY DISABLED AT THIS MOMENT\n"
@@ -133,10 +158,6 @@ async def num_signals(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ⏱ TIME WINDOW + SIGNAL GEN
 # ==============================
 async def time_window(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message.text.isdigit():
-        await update.message.reply_text("❌ Enter a valid number.")
-        return TIME_WINDOW
-
     total_minutes = int(update.message.text)
     num_signals = context.user_data["num_signals"]
     selected_markets = context.user_data["markets"]
@@ -147,7 +168,6 @@ async def time_window(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for _ in range(num_signals):
         m = random.choice(selected_markets)
-
         while True:
             rand_minute = random.randint(5, total_minutes + 5)
             signal_time = now + timedelta(minutes=rand_minute)
@@ -164,14 +184,25 @@ async def time_window(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = f"🚀📊IIB Future Signals for next {total_minutes} minutes---\n\n"
 
     for t, m, d, c in signals:
-        if d == "UP":
-            msg += f"🟢 {m} → {t.strftime('%I:%M %p')} : {d} | Confidence: {c}%\n"
-        else:
-            msg += f"🔴 {m} → {t.strftime('%I:%M %p')} : {d} | Confidence: {c}%\n"
+        emoji = "🟢" if d == "UP" else "🔴"
+        msg += f"{emoji} {m} → {t.strftime('%I:%M %p')} : {d} | Confidence: {c}%\n"
 
     msg += "\n✅ Signals generation completed by order of IIB, Now use it with proper rules!!"
 
     await update.message.reply_text(msg)
+
+    # 🔔 ADMIN LOG
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=(
+            "📊 SIGNAL GENERATED\n"
+            f"User: {nick(update.effective_user.id)}\n"
+            f"Signals: {num_signals}\n"
+            f"Window: {total_minutes} min\n"
+            f"Time: {datetime.now(dhaka).strftime('%Y-%m-%d %I:%M %p')}"
+        )
+    )
+
     return ConversationHandler.END
 
 # ==============================
