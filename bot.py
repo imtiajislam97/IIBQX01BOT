@@ -1,3 +1,5 @@
+import sys
+print(Python 3.11.9, sys.version)
 import random
 from datetime import datetime, timedelta
 import pytz
@@ -193,3 +195,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
