@@ -1,5 +1,4 @@
 import os
-import sys
 import random
 from datetime import datetime, timedelta
 import pytz
@@ -15,20 +14,12 @@ from telegram.ext import (
 )
 
 # ==============================
-# 🐍 PYTHON VERSION INFO
+# 🔐 BOT TOKEN
 # ==============================
-print("Running on:", sys.version)
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # set in Railway / Render env vars
 
 # ==============================
-# 🔐 BOT TOKEN (ENV VARIABLE)
-# ==============================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-
-if not BOT_TOKEN:
-    raise RuntimeError("❌ BOT_TOKEN environment variable not set")
-
-# ==============================
-# 🔒 ALLOWED USERS
+# 🔒 ALLOWED TELEGRAM USERS
 # ==============================
 ALLOWED_USERS = {
     7116950303,
@@ -36,7 +27,7 @@ ALLOWED_USERS = {
 }
 
 # ==============================
-# 🕘 TIMEZONE (DHAKA)
+# 🕘 AUTO DISABLE LOGIC (Dhaka) – EXACT SAME
 # ==============================
 dhaka = pytz.timezone("Asia/Dhaka")
 
@@ -53,13 +44,12 @@ def is_bot_disabled():
     return False
 
 # ==============================
-# 📊 MARKETS
+# 📊 MARKETS (UNCHANGED)
 # ==============================
 MARKETS = [
     "EURUSD", "USDJPY", "USDCAD", "EURJPY", "EURCAD", "EURGBP", "EURCHF",
-    "GBPUSD", "GBPJPY", "GBPCAD", "GBPCHF", "GBPAUD",
-    "AUDUSD", "AUDJPY", "AUDCAD", "AUDCHF",
-    "USDCHF", "NZDUSD", "CHFJPY", "CADJPY"
+    "GBPUSD", "GBPJPY", "GBPCAD", "GBPCHF", "GBPAUD", "AUDUSD", "AUDJPY",
+    "AUDCAD", "AUDCHF", "USDCHF", "NZDUSD", "CHFJPY", "CADJPY"
 ]
 
 # ==============================
@@ -68,7 +58,7 @@ MARKETS = [
 SELECT_MARKET, NUM_SIGNALS, TIME_WINDOW = range(3)
 
 # ==============================
-# 🚀 /start
+# 🚀 START
 # ==============================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -77,101 +67,97 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚫 You are not authorized to use this bot.")
         return ConversationHandler.END
 
-    context.user_data.clear()
-
     if is_bot_disabled():
         await update.message.reply_text(
-            "⚠️ BOT TEMPORARILY DISABLED\n"
-            "⏰ Trading time restriction active"
+            "⚠️SORRY, MATE,\n"
+            "🚫 IIB Future Signal Bot IS TEMPORARILY DISABLED AT THIS MOMENT\n"
+            "📛 BY ORDER OF IIB"
         )
         return ConversationHandler.END
 
-    text = "🚀 *IIB Future Signal Bot*\n\n📊 *Choose market numbers:*\n"
+    context.user_data.clear()
+
+    text = "🚀IIB Future Signal Bot STARTED!\n\n"
+    text += "📊Choose your market/s :-\n"
+
     for i, m in enumerate(MARKETS, start=1):
         text += f"{i}. {m}\n"
 
-    text += "\n✍️ Example: `1,3,5`"
+    text += "\nWhich market/s do you want??\nExample: 1,3,5"
 
-    await update.message.reply_text(text, parse_mode="Markdown")
+    await update.message.reply_text(text)
     return SELECT_MARKET
 
 # ==============================
-# 📊 MARKET SELECT
+# 📊 MARKET SELECTION
 # ==============================
 async def select_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        indices = [int(x.strip()) - 1 for x in update.message.text.split(",")]
-        selected = [MARKETS[i] for i in indices if 0 <= i < len(MARKETS)]
-    except:
-        selected = []
+    indices = [int(x.strip()) - 1 for x in update.message.text.split(",") if x.strip().isdigit()]
+    selected_markets = [MARKETS[i] for i in indices if 0 <= i < len(MARKETS)]
 
-    if not selected:
+    if not selected_markets:
         await update.message.reply_text("❌ Invalid selection. Try again.")
         return SELECT_MARKET
 
-    context.user_data["markets"] = selected
-    await update.message.reply_text("🔢 How many signals?")
+    context.user_data["markets"] = selected_markets
+    await update.message.reply_text("How many signals do you want??")
     return NUM_SIGNALS
 
 # ==============================
-# 🔢 SIGNAL COUNT
+# 🔢 NUMBER OF SIGNALS
 # ==============================
 async def num_signals(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.text.isdigit():
-        await update.message.reply_text("❌ Enter a number")
+        await update.message.reply_text("❌ Enter a valid number.")
         return NUM_SIGNALS
 
     context.user_data["num_signals"] = int(update.message.text)
-    await update.message.reply_text("⏱ Time window (minutes)?")
+    await update.message.reply_text("Enter total time window for signals in minutes:")
     return TIME_WINDOW
 
 # ==============================
-# ⏱ SIGNAL GENERATION
+# ⏱ TIME WINDOW + SIGNAL GEN
 # ==============================
 async def time_window(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.text.isdigit():
-        await update.message.reply_text("❌ Enter a number")
+        await update.message.reply_text("❌ Enter a valid number.")
         return TIME_WINDOW
 
     total_minutes = int(update.message.text)
     num_signals = context.user_data["num_signals"]
-    markets = context.user_data["markets"]
+    selected_markets = context.user_data["markets"]
 
     now = datetime.now(dhaka)
     used_times = set()
     signals = []
 
     for _ in range(num_signals):
-        market = random.choice(markets)
+        m = random.choice(selected_markets)
 
         while True:
-            mins = random.randint(5, total_minutes + 5)
-            t = now + timedelta(minutes=mins)
-            if t not in used_times:
-                used_times.add(t)
+            rand_minute = random.randint(5, total_minutes + 5)
+            signal_time = now + timedelta(minutes=rand_minute)
+            if signal_time not in used_times:
+                used_times.add(signal_time)
                 break
 
         direction = random.choice(["UP", "DOWN"])
         confidence = random.randint(85, 95)
-
-        signals.append((t, market, direction, confidence))
+        signals.append((signal_time, m, direction, confidence))
 
     signals.sort(key=lambda x: x[0])
 
-    msg = f"📊 *Signals (next {total_minutes} min)*\n\n"
+    msg = f"🚀📊IIB Future Signals for next {total_minutes} minutes---\n\n"
+
     for t, m, d, c in signals:
-        emoji = "🟢" if d == "UP" else "🔴"
-        msg += f"{emoji} *{m}* → `{t.strftime('%I:%M %p')}` | *{d}* | {c}%\n"
+        if d == "UP":
+            msg += f"🟢 {m} → {t.strftime('%I:%M %p')} : {d} | Confidence: {c}%\n"
+        else:
+            msg += f"🔴 {m} → {t.strftime('%I:%M %p')} : {d} | Confidence: {c}%\n"
 
-    await update.message.reply_text(msg, parse_mode="Markdown")
-    return ConversationHandler.END
+    msg += "\n✅ Signals generation completed by order of IIB, Now use it with proper rules!!"
 
-# ==============================
-# ❌ CANCEL
-# ==============================
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    await update.message.reply_text("❌ Cancelled")
+    await update.message.reply_text(msg)
     return ConversationHandler.END
 
 # ==============================
@@ -187,7 +173,7 @@ def main():
             NUM_SIGNALS: [MessageHandler(filters.TEXT & ~filters.COMMAND, num_signals)],
             TIME_WINDOW: [MessageHandler(filters.TEXT & ~filters.COMMAND, time_window)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("start", start)],
         allow_reentry=True
     )
 
