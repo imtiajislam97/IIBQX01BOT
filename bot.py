@@ -15,7 +15,7 @@ from telegram.ext import (
 # ==============================
 # 🔐 BOT TOKEN
 # ==============================
-BOT_TOKEN = "8517145371:AAGdn3rpJCz2vOpsLh7_nkrR6Rre1Vizzko"
+BOT_TOKEN = os.getenv(8517145371:AAGdn3rpJCz2vOpsLh7_nkrR6Rre1Vizzko)
 
 # ==============================
 # 🔒 ALLOWED USERS (ONLY THESE CAN USE)
