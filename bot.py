@@ -27,7 +27,7 @@ ALLOWED_USERS = {
 }
 
 # ==============================
-# 🕘 AUTO DISABLE LOGIC (Dhaka) – EXACT SAME
+# 🕘 AUTO DISABLE LOGIC (Dhaka) – FIXED, RULES SAME
 # ==============================
 dhaka = pytz.timezone("Asia/Dhaka")
 
@@ -36,12 +36,26 @@ def is_bot_disabled():
     day = now.strftime("%A")
     hour = now.hour
 
-    if (day == "Friday" and hour >= 21) or \
-       (day in ["Saturday", "Sunday"] and (hour < 9 or hour >= 21)) or \
-       (day == "Monday" and hour < 9) or \
-       (day not in ["Saturday", "Sunday", "Friday", "Monday"] and (hour < 9 or hour >= 21)):
-        return True
-    return False
+    allowed = False
+
+    # Monday–Thursday: 9 AM → 9 PM
+    if day in ["Tuesday", "Wednesday", "Thursday"]:
+        if 9 <= hour < 21:
+            allowed = True
+
+    # Monday: after 9 AM only
+    elif day == "Monday":
+        if 9 <= hour < 21:
+            allowed = True
+
+    # Friday: before 9 PM only
+    elif day == "Friday":
+        if hour < 21:
+            allowed = True
+
+    # Saturday & Sunday: always disabled
+
+    return not allowed
 
 # ==============================
 # 📊 MARKETS (UNCHANGED)
