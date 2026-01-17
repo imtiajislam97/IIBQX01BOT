@@ -1,6 +1,2 @@
 python-telegram-bot==20.7
-colorama
-pandas
-numpy
 pytz
-tradingview_ta
