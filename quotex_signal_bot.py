@@ -8,7 +8,7 @@ import time
 init(autoreset=True)
 
 # ==============================
-# 🕘 AUTO DISABLE LOGIC (Dhaka) — SAME
+# 🕘 AUTO DISABLE LOGIC (Dhaka) — UNCHANGED
 # ==============================
 dhaka = pytz.timezone('Asia/Dhaka')
 now = datetime.now(dhaka)
@@ -28,7 +28,7 @@ else:
     print(Fore.RED + "🚀IIB Future Signal Bot " + Fore.LIGHTGREEN_EX + "STARTED!\n")
 
 # ==============================
-# 📊 MARKETS — SAME
+# 📊 MARKETS — SAME AS OLD
 # ==============================
 markets = [
     "EURUSD", "USDJPY", "USDCAD", "EURJPY", "EURCAD", "EURGBP", "EURCHF",
@@ -50,17 +50,17 @@ selected_markets = [markets[i] for i in market_indices]
 print(Fore.CYAN + f"\n🚀📊IIB Future Signals for next {total_minutes} minutes---")
 
 # ==============================
-# 📈 REAL MARKET LOGIC
+# 📈 REAL MARKET DATA
 # ==============================
-API_KEY = "demo"  # TwelveData demo key
+API_KEY = "demo"   # replace with real key later
 INTERVAL = "1min"
 
-def get_signal(symbol):
-    url = f"https://api.twelvedata.com/time_series"
+def analyze_market(symbol):
+    url = "https://api.twelvedata.com/time_series"
     params = {
         "symbol": symbol,
         "interval": INTERVAL,
-        "outputsize": 60,
+        "outputsize": 120,
         "apikey": API_KEY
     }
 
@@ -72,39 +72,53 @@ def get_signal(symbol):
     df["close"] = df["close"].astype(float)
     df = df[::-1]
 
-    df["ema_fast"] = df["close"].ewm(span=9).mean()
-    df["ema_slow"] = df["close"].ewm(span=21).mean()
+    # ===== Indicators =====
+    df["ema9"] = df["close"].ewm(span=9).mean()
+    df["ema21"] = df["close"].ewm(span=21).mean()
+    df["ema50"] = df["close"].ewm(span=50).mean()
 
+    # RSI
     delta = df["close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
     rs = gain.rolling(14).mean() / loss.rolling(14).mean()
     df["rsi"] = 100 - (100 / (1 + rs))
 
+    # MACD
+    ema12 = df["close"].ewm(span=12).mean()
+    ema26 = df["close"].ewm(span=26).mean()
+    df["macd"] = ema12 - ema26
+    df["signal"] = df["macd"].ewm(span=9).mean()
+
     last = df.iloc[-1]
 
-    if last["ema_fast"] > last["ema_slow"] and last["rsi"] < 70:
-        return "UP", 92
-    if last["ema_fast"] < last["ema_slow"] and last["rsi"] > 30:
-        return "DOWN", 92
+    # ===== Trader-style logic =====
+    trend_up = last["ema9"] > last["ema21"] > last["ema50"]
+    trend_down = last["ema9"] < last["ema21"] < last["ema50"]
+
+    if trend_up and last["rsi"] > 50 and last["rsi"] < 65 and last["macd"] > last["signal"]:
+        return "UP", 90
+
+    if trend_down and last["rsi"] < 50 and last["rsi"] > 35 and last["macd"] < last["signal"]:
+        return "DOWN", 90
 
     return None
 
 # ==============================
-# 🧠 SIGNAL GENERATION
+# 🧠 SIGNAL GENERATION — NO RANDOM
 # ==============================
-now = datetime.now(dhaka)
 signals = []
 used_times = set()
+base_time = datetime.now(dhaka) + timedelta(minutes=5)
 
 while len(signals) < num_signals:
     for m in selected_markets:
-        result = get_signal(m)
+        result = analyze_market(m)
         if not result:
             continue
 
         direction, confidence = result
-        signal_time = now + timedelta(minutes=5 + len(signals) * 2)
+        signal_time = base_time + timedelta(minutes=len(signals) * 2)
 
         if signal_time in used_times:
             continue
