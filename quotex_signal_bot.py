@@ -8,7 +8,7 @@ import time
 init(autoreset=True)
 
 # ==============================
-# 🕘 AUTO DISABLE LOGIC (Dhaka) — UNCHANGED
+# 🕘 AUTO DISABLE LOGIC (Dhaka) — SAME
 # ==============================
 dhaka = pytz.timezone('Asia/Dhaka')
 now = datetime.now(dhaka)
@@ -28,7 +28,7 @@ else:
     print(Fore.RED + "🚀IIB Future Signal Bot " + Fore.LIGHTGREEN_EX + "STARTED!\n")
 
 # ==============================
-# 📊 MARKETS — SAME AS OLD
+# 📊 MARKETS — SAME
 # ==============================
 markets = [
     "EURUSD", "USDJPY", "USDCAD", "EURJPY", "EURCAD", "EURGBP", "EURCHF",
@@ -50,12 +50,12 @@ selected_markets = [markets[i] for i in market_indices]
 print(Fore.CYAN + f"\n🚀📊IIB Future Signals for next {total_minutes} minutes---")
 
 # ==============================
-# 📈 REAL MARKET DATA
+# 📈 REAL MARKET LOGIC
 # ==============================
-API_KEY = "demo"   # replace with real key later
+API_KEY = "demo"  # TwelveData demo key
 INTERVAL = "1min"
 
-def analyze_market(symbol):
+def get_signal(symbol):
     url = "https://api.twelvedata.com/time_series"
     params = {
         "symbol": symbol,
@@ -70,55 +70,77 @@ def analyze_market(symbol):
 
     df = pd.DataFrame(r["values"])
     df["close"] = df["close"].astype(float)
+    df["high"] = df["high"].astype(float)
+    df["low"] = df["low"].astype(float)
     df = df[::-1]
 
-    # ===== Indicators =====
+    # === EMA ===
     df["ema9"] = df["close"].ewm(span=9).mean()
     df["ema21"] = df["close"].ewm(span=21).mean()
     df["ema50"] = df["close"].ewm(span=50).mean()
 
-    # RSI
+    # === RSI ===
     delta = df["close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
     rs = gain.rolling(14).mean() / loss.rolling(14).mean()
     df["rsi"] = 100 - (100 / (1 + rs))
 
-    # MACD
+    # === MACD ===
     ema12 = df["close"].ewm(span=12).mean()
     ema26 = df["close"].ewm(span=26).mean()
     df["macd"] = ema12 - ema26
     df["signal"] = df["macd"].ewm(span=9).mean()
 
+    # === ATR (volatility filter) ===
+    tr = pd.concat([
+        df["high"] - df["low"],
+        abs(df["high"] - df["close"].shift()),
+        abs(df["low"] - df["close"].shift())
+    ], axis=1).max(axis=1)
+    df["atr"] = tr.rolling(14).mean()
+
     last = df.iloc[-1]
 
-    # ===== Trader-style logic =====
-    trend_up = last["ema9"] > last["ema21"] > last["ema50"]
-    trend_down = last["ema9"] < last["ema21"] < last["ema50"]
+    # 🚫 Skip dead / choppy market
+    if last["atr"] < df["atr"].mean():
+        return None
+    if 45 < last["rsi"] < 55:
+        return None
 
-    if trend_up and last["rsi"] > 50 and last["rsi"] < 65 and last["macd"] > last["signal"]:
-        return "UP", 90
+    # ✅ STRONG UP TREND
+    if (
+        last["ema9"] > last["ema21"] > last["ema50"] and
+        last["macd"] > last["signal"] and
+        last["rsi"] > 55
+    ):
+        return "UP", 95
 
-    if trend_down and last["rsi"] < 50 and last["rsi"] > 35 and last["macd"] < last["signal"]:
-        return "DOWN", 90
+    # ✅ STRONG DOWN TREND
+    if (
+        last["ema9"] < last["ema21"] < last["ema50"] and
+        last["macd"] < last["signal"] and
+        last["rsi"] < 45
+    ):
+        return "DOWN", 95
 
     return None
 
 # ==============================
-# 🧠 SIGNAL GENERATION — NO RANDOM
+# 🧠 SIGNAL GENERATION
 # ==============================
+now = datetime.now(dhaka)
 signals = []
 used_times = set()
-base_time = datetime.now(dhaka) + timedelta(minutes=5)
 
 while len(signals) < num_signals:
     for m in selected_markets:
-        result = analyze_market(m)
+        result = get_signal(m)
         if not result:
             continue
 
         direction, confidence = result
-        signal_time = base_time + timedelta(minutes=len(signals) * 2)
+        signal_time = now + timedelta(minutes=5 + len(signals) * 2)
 
         if signal_time in used_times:
             continue
